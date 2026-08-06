@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1a2645"/>
+      <stop offset="1" stop-color="#070b16"/>
+    </linearGradient>
+    <linearGradient id="tw" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fd8ff"/>
+      <stop offset="1" stop-color="#2f8fe0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Weg -->
+  <path d="M40 372 H180 V232 H332 V372 H472"
+        fill="none" stroke="#5b4830" stroke-width="66"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M40 372 H180 V232 H332 V372 H472"
+        fill="none" stroke="#7a6244" stroke-width="50"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Turm -->
+  <ellipse cx="256" cy="336" rx="86" ry="26" fill="#000" opacity=".35"/>
+  <path d="M180 330 L200 190 H312 L332 330 Z" fill="#2a3350"/>
+  <path d="M196 318 L212 206 H300 L316 318 Z" fill="url(#tw)"/>
+  <rect x="196" y="150" width="120" height="56" rx="12" fill="#374372"/>
+  <g fill="#5ad1ff">
+    <rect x="206" y="120" width="24" height="36" rx="6"/>
+    <rect x="244" y="120" width="24" height="36" rx="6"/>
+    <rect x="282" y="120" width="24" height="36" rx="6"/>
+  </g>
+
+  <!-- Geschoss -->
+  <circle cx="256" cy="76" r="20" fill="#ffd166"/>
+  <circle cx="256" cy="76" r="34" fill="#ffd166" opacity=".28"/>
+</svg>

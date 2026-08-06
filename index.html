@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Tower Defense 2026</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1">
+<meta name="theme-color" content="#0b1020">
+<meta name="description" content="Offline Tower Defense für PC, Tablet und Smartphone.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ SPIELFELD ============ -->
+  <div id="stage">
+    <canvas id="game" width="960" height="576"></canvas>
+    <div id="toast" class="toast" aria-live="polite"></div>
+  </div>
+
+  <!-- ============ SEITENLEISTE / UNTERLEISTE ============ -->
+  <aside id="sidebar">
+
+    <div id="hud">
+      <div class="stat" title="Leben">
+        <span class="ico">❤</span><span id="stat-lives">20</span>
+      </div>
+      <div class="stat" title="Gold">
+        <span class="ico">◈</span><span id="stat-gold">0</span>
+      </div>
+      <div class="stat" title="Welle">
+        <span class="ico">≋</span><span id="stat-wave">0/30</span>
+      </div>
+      <div class="stat stat-score" title="Punkte">
+        <span class="ico">★</span><span id="stat-score">0</span>
+      </div>
+    </div>
+
+    <div id="lifebar"><div id="lifebar-fill"></div></div>
+
+    <!-- Turmauswahl -->
+    <div id="shop" class="panel">
+      <div class="panel-head">
+        <span>Türme</span>
+        <span class="hint" id="shop-hint">Bauen: antippen</span>
+      </div>
+      <div id="shop-list"></div>
+    </div>
+
+    <!-- Ausgewählter Turm -->
+    <div id="towerpanel" class="panel hidden">
+      <div class="panel-head">
+        <span id="tp-name">Turm</span>
+        <button id="tp-close" class="x" aria-label="Schließen">✕</button>
+      </div>
+      <div id="tp-body">
+        <div class="tp-stats">
+          <div><span>Schaden</span><b id="tp-dmg">–</b></div>
+          <div><span>Reichweite</span><b id="tp-range">–</b></div>
+          <div><span>Tempo</span><b id="tp-rate">–</b></div>
+          <div><span>Stufe</span><b id="tp-level">–</b></div>
+        </div>
+        <div id="tp-special" class="tp-special"></div>
+        <div class="tp-target">
+          <span>Ziel</span>
+          <div id="tp-targeting" class="segmented"></div>
+        </div>
+        <div class="tp-actions">
+          <button id="tp-upgrade" class="btn btn-up">Upgrade</button>
+          <button id="tp-sell" class="btn btn-sell">Verkaufen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wellen-Info -->
+    <div id="wavepanel" class="panel">
+      <div class="panel-head"><span>Nächste Welle</span><span class="hint" id="wave-timer"></span></div>
+      <div id="wave-preview"></div>
+    </div>
+
+    <!-- Steuerung -->
+    <div id="controls">
+      <button id="btn-wave" class="btn btn-primary">
+        <span id="btn-wave-label">Welle starten</span>
+        <span id="btn-wave-bonus" class="bonus"></span>
+      </button>
+      <div class="ctrl-row">
+        <button id="btn-pause" class="btn btn-icon" title="Pause (Leertaste)">❚❚</button>
+        <button id="btn-speed" class="btn btn-icon" title="Geschwindigkeit (F)">1×</button>
+        <button id="btn-sound" class="btn btn-icon" title="Ton (M)">🔊</button>
+        <button id="btn-menu" class="btn btn-icon" title="Menü (Esc)">☰</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- ============ OVERLAYS ============ -->
+<div id="overlay" class="overlay">
+  <div class="overlay-card" id="overlay-card"></div>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/config.js"></script>
+<script src="js/maps.js"></script>
+<script src="js/waves.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
