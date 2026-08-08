@@ -219,7 +219,14 @@
       // Auf schmalen Geräten weicht der Shop dem Turmpanel (siehe CSS)
       doc.body.classList.toggle('has-selection', !!t);
       if (!t) { D.towerPanel.classList.add('hidden'); return; }
+      var wasHidden = D.towerPanel.classList.contains('hidden');
       D.towerPanel.classList.remove('hidden');
+      /* Auf kleinen Bildschirmen blättert die Leiste. Frisch gewählt,
+         holen wir das Panel sicherheitshalber in den Blick – sonst
+         bleibt das Upgrade unbemerkt unterhalb des Randes. */
+      if (wasHidden && D.towerPanel.scrollIntoView) {
+        try { D.towerPanel.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+      }
 
       var next = t.canUpgrade();
       $('tp-name').textContent = (t.isHero ? '★ ' : '') + t.def.name + ' · Stufe ' + t.level;

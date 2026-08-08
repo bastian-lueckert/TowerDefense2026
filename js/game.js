@@ -6,6 +6,7 @@
   var TD = global.TD, U = TD.utils;
   var CELL = TD.GRID.CELL, COLS = TD.GRID.COLS, ROWS = TD.GRID.ROWS;
   var PAD = TD.GRID.PAD_TOP;
+  var panHintShown = false;   // Bedienhinweis fürs Handy nur einmal je Sitzung
   var W = COLS * CELL, H = ROWS * CELL;
   var CH = H + PAD;                    // Canvas ist oben etwas höher als das Raster
 
@@ -42,6 +43,7 @@
     buildKey: null,
     hoverCell: null,
     selected: null,
+    dragCancelled: false,
 
     shake: 0, hurtFlash: 0,
     stats: null,
@@ -56,6 +58,10 @@
       this.bindInput();
 
       var self = this;
+      if (TD.viewport) {
+        TD.viewport.init(canvas.parentNode, canvas);
+        setTimeout(function () { TD.viewport.autoFit(); }, 60);
+      }
       global.addEventListener('resize', function () { self.resize(); });
       global.addEventListener('orientationchange', function () {
         setTimeout(function () { self.resize(); }, 250);
@@ -164,6 +170,18 @@
       TD.render.invalidateBackground();
       TD.audio.startMusic(this.factionKey);
       TD.ui.onGameStart();
+
+      /* Auf dem Handy ist das Feld vergrößert und damit breiter als der
+         Bildschirm. Einmal je Sitzung sagen wir, wie man sich bewegt. */
+      if (TD.viewport) {
+        TD.viewport.autoFit();
+        if (TD.viewport.zoomed() && !panHintShown) {
+          panHintShown = true;
+          setTimeout(function () {
+            TD.ui.toast('Mit zwei Fingern schieben und zoomen');
+          }, 1200);
+        }
+      }
     },
 
     /* =====================================================
@@ -904,6 +922,44 @@
       return { cx: cx, cy: cy };
     },
 
+    /**
+     * Beim Bauen mit dem Finger liegt das Ziel unter der Kuppe und ist
+     * damit unsichtbar. Deshalb zielen wir ein Stück oberhalb des
+     * Berührungspunktes – die Vorschau bleibt so immer frei im Blick.
+     * In der obersten Reihe wird der Versatz zurückgenommen, sonst
+     * käme man dort nicht mehr hin.
+     */
+    aim: function (pt, ev) {
+      if (!ev || ev.pointerType === 'mouse' || !this.buildKey) return pt;
+      var lift = CELL * 0.62;
+      var y = pt.y - lift;
+      if (y < 0) y = Math.min(pt.y, CELL * 0.5);
+      return { x: pt.x, y: y };
+    },
+
+    /**
+     * Turm in der Nähe des Tipppunktes finden. Ohne diese Toleranz
+     * verfehlt man auf dem Handy ständig knapp das richtige Feld.
+     */
+    towerNear: function (pt, cell) {
+      var t = this.towerAt(cell.cx, cell.cy);
+      if (t) return t;
+      var best = null, bestD = CELL * 0.85;
+      for (var i = 0; i < this.towers.length; i++) {
+        var o = this.towers[i];
+        var dx = o.x - pt.x, dy = o.y - pt.y;
+        var d = Math.sqrt(dx * dx + dy * dy);
+        if (d < bestD) { bestD = d; best = o; }
+      }
+      return best;
+    },
+
+    /** Laufende Berührung verwerfen (z. B. wenn ein zweiter Finger dazukommt). */
+    cancelDrag: function () {
+      this.dragCancelled = true;
+      this.hoverCell = null;
+    },
+
     bindInput: function () {
       var self = this;
       var c = this.canvas;
@@ -914,10 +970,12 @@
         if (self.state !== 'playing') return;
         // Nur die linke Taste baut – rechts ist zum Abbrechen da
         if (ev.button != null && ev.button !== 0) return;
+        if (TD.viewport && TD.viewport.gesturing) return;
         TD.audio.unlock();
         ev.preventDefault();
         dragging = true;
-        var pt = self.toLogical(ev.clientX, ev.clientY);
+        self.dragCancelled = false;
+        var pt = self.aim(self.toLogical(ev.clientX, ev.clientY), ev);
         downCell = self.cellFrom(pt);
         self.hoverCell = downCell;
         if (c.setPointerCapture && ev.pointerId != null) {
@@ -927,7 +985,8 @@
 
       function onMove(ev) {
         if (self.state !== 'playing') return;
-        var pt = self.toLogical(ev.clientX, ev.clientY);
+        if (TD.viewport && TD.viewport.gesturing) return;
+        var pt = self.aim(self.toLogical(ev.clientX, ev.clientY), ev);
         var cell = self.cellFrom(pt);
         // Maus: immer anzeigen. Touch: nur während der Berührung.
         if (ev.pointerType === 'mouse' || dragging) self.hoverCell = cell;
@@ -938,14 +997,17 @@
         if (ev.button != null && ev.button !== 0) return;
         if (!dragging) return;
         dragging = false;
+        if (self.dragCancelled) { self.dragCancelled = false; self.hoverCell = null; return; }
+        if (TD.viewport && TD.viewport.gesturing) { self.hoverCell = null; return; }
 
-        var pt = self.toLogical(ev.clientX, ev.clientY);
+        var raw = self.toLogical(ev.clientX, ev.clientY);
+        var pt = self.aim(raw, ev);
         var cell = self.cellFrom(pt);
         if (!cell) { self.hoverCell = null; return; }
 
-        // Truhen haben Vorrang vor allem anderen
+        // Truhen haben Vorrang vor allem anderen (dort ohne Versatz gezielt)
         for (var b = self.lootboxes.length - 1; b >= 0; b--) {
-          if (self.lootboxes[b].hitTest(pt.x, pt.y)) {
+          if (self.lootboxes[b].hitTest(raw.x, raw.y)) {
             self.openLootbox(self.lootboxes[b]);
             return;
           }
@@ -979,7 +1041,7 @@
           return;
         }
 
-        var t = self.towerAt(cell.cx, cell.cy);
+        var t = self.towerNear(raw, cell);
         if (t) {
           TD.audio.click();
           self.selectTower(t);
@@ -997,7 +1059,7 @@
         c.addEventListener('pointerdown', onDown);
         c.addEventListener('pointermove', onMove);
         c.addEventListener('pointerup', onUp);
-        c.addEventListener('pointercancel', function () { dragging = false; self.hoverCell = null; });
+        c.addEventListener('pointercancel', function () { dragging = false; self.dragCancelled = false; self.hoverCell = null; });
         c.addEventListener('pointerleave', onLeave);
       } else {
         // Rückfallebene für sehr alte Browser
