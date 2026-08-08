@@ -7,16 +7,25 @@
   'use strict';
   var TD = global.TD, U = TD.utils;
 
-  /* Ab welcher Welle ein Typ auftauchen darf + Budgetkosten + Spawnabstand */
+  /* Ab welcher Welle ein Typ auftauchen darf + Budgetkosten + Spawnabstand.
+     ramp/rampRate begrenzen, wie viele davon in den ersten Wellen nach
+     ihrer Einführung höchstens vorkommen – ein neuer Gegnertyp soll sich
+     ankündigen und nicht sofort in Massen auftreten. */
   var POOL = [
     { type:'grunt',  from:1,  cost:4,   gap:0.62, weight:3.0 },
     { type:'runner', from:2,  cost:5,   gap:0.48, weight:2.2 },
-    { type:'swarm',  from:4,  cost:1.6, gap:0.22, weight:1.8 },
-    { type:'flyer',  from:5,  cost:9.5, gap:0.55, weight:2.0 },
-    { type:'tank',   from:7,  cost:15,  gap:0.95, weight:1.8 },
-    { type:'shield', from:10, cost:13,  gap:0.85, weight:1.5 },
-    { type:'healer', from:13, cost:17,  gap:1.05, weight:1.1 }
+    { type:'swarm',  from:4,  cost:1.6, gap:0.22, weight:1.8, ramp:6, rampRate:3 },
+    { type:'flyer',  from:7,  cost:9.5, gap:0.55, weight:2.0, ramp:2, rampRate:0.9 },
+    { type:'tank',   from:9,  cost:15,  gap:0.95, weight:1.8, ramp:2, rampRate:0.7 },
+    { type:'shield', from:12, cost:13,  gap:0.85, weight:1.5, ramp:2, rampRate:0.6 },
+    { type:'healer', from:15, cost:17,  gap:1.05, weight:1.1, ramp:1, rampRate:0.4 }
   ];
+
+  /** Höchstzahl eines Typs in Welle n (Infinity = unbegrenzt). */
+  function limitFor(p, n) {
+    if (!p.ramp) return Infinity;
+    return Math.max(1, Math.round(p.ramp + (n - p.from) * p.rampRate));
+  }
 
   var BOSS_EVERY = 10;
 
@@ -40,30 +49,41 @@
 
     /**
      * Erzeugt die Wellenbeschreibung.
+     * @param {number} n bestimmt, welche Gegnerarten auftreten
+     * @param {string} diffKey
+     * @param {number} [sizeWave] bestimmt den Umfang der Welle. Im Feldzug
+     *        ist das die Welle innerhalb des Levels – so bleiben die Wellen
+     *        kurz genug, auch wenn schon schwere Arten dabei sind.
      * @returns {{n:number, groups:Array, boss:boolean, totalEnemies:number}}
      */
-    generate: function (n, diffKey) {
+    generate: function (n, diffKey, sizeWave) {
       var rnd = U.rng(n * 7919 + hashStr(diffKey || 'normal'));
       var boss = API.isBossWave(n);
       var groups = [];
+      var sw = sizeWave == null ? n : sizeWave;
 
       // Verfügbare Typen dieser Welle
       var avail = POOL.filter(function (p) { return n >= p.from; });
 
       // Budget bestimmt den Umfang der Welle
-      var budget = 12 + n * 7.5 + Math.pow(n, 1.55);
+      var budget = 12 + sw * 7.5 + Math.pow(sw, 1.55);
       if (boss) budget *= 0.55;   // Boss frisst einen Teil des Kontingents
 
       // Ganz frühe Wellen bewusst klein und ruhig halten
-      if (n <= 2) budget = 10 + n * 5;
+      if (sw <= 2) budget = 10 + sw * 5;
 
       var counts = {};
       var guard = 0;
       while (budget > 1 && guard++ < 400) {
-        var p = weightedPick(avail, rnd, n);
-        if (!p || p.cost > budget && p.cost > 3) {
-          // Nur noch billige Typen zulassen
-          var cheap = avail.filter(function (q) { return q.cost <= budget; });
+        // Nur Typen, die ihr Kontingent noch nicht ausgeschöpft haben
+        var open = avail.filter(function (q) {
+          return (counts[q.type] || 0) < limitFor(q, n);
+        });
+        if (!open.length) break;
+
+        var p = weightedPick(open, rnd, n);
+        if (!p || (p.cost > budget && p.cost > 3)) {
+          var cheap = open.filter(function (q) { return q.cost <= budget; });
           if (!cheap.length) break;
           p = weightedPick(cheap, rnd, n);
         }

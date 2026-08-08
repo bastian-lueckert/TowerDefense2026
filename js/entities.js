@@ -9,9 +9,14 @@
   /* =======================================================
      GEGNER
      ======================================================= */
-  function Enemy(game, type, waveN) {
-    var def = TD.ENEMIES[type];
+  /**
+   * @param {number} [pathIndex] Weg, auf dem der Gegner anrückt
+   */
+  function Enemy(game, type, waveN, pathIndex) {
+    var def = TD.enemyDef(game.factionKey, type);   // Aussehen je nach Mythologie
     var st = TD.waves.statsFor(type, waveN, game.diff);
+    this.pathIndex = pathIndex || 0;
+    if (this.pathIndex >= game.map.paths.length) this.pathIndex = 0;
 
     this.game = game;
     this.def = def;
@@ -38,13 +43,15 @@
     // Fliegende Gegner nehmen die Luftlinie. Damit sie nicht je nach
     // Wegführung unfair schnell am Ziel sind, wird ihr Tempo im gleichen
     // Verhältnis gekürzt, in dem ihre Strecke kürzer ist als der Weg.
+    var myPath = game.map.paths[this.pathIndex];
     if (this.flying) {
-      var a = game.map.points[0], b = game.map.points[game.map.points.length - 1];
+      var pp = myPath.points;
+      var a = pp[0], b = pp[pp.length - 1];
       this.airFrom = a; this.airTo = b;
       this.pathLen = U.dist(a.x, a.y, b.x, b.y);
-      this.baseSpeed *= this.pathLen / game.map.length;
+      this.baseSpeed *= this.pathLen / myPath.length;
     } else {
-      this.pathLen = game.map.length;
+      this.pathLen = myPath.length;
     }
 
     // Leichte Streuung, damit Gegner nicht exakt übereinander laufen
@@ -65,7 +72,7 @@
         angle: ang
       };
     }
-    return TD.maps.pointAt(this.game.map, d);
+    return TD.maps.pointAt(this.game.map, this.pathIndex, d);
   };
 
   Enemy.prototype.progress = function () {
@@ -141,9 +148,16 @@
     if (!this.alive) return 0;
     opts = opts || {};
 
+    var dmg = amount;
+
+    /* Erster Schlag: Manche Völker treffen am härtesten, solange der
+       Gegner noch unverletzt ist. */
+    if (opts.tower && opts.tower.def.firstStrike > 1 && this.hp >= this.maxHp) {
+      dmg *= opts.tower.def.firstStrike;
+    }
+
     // Panzerung zieht flach ab, lässt aber immer ein Viertel durch –
     // sonst wären schnellfeuernde Türme gegen Panzer völlig wirkungslos.
-    var dmg = amount;
     if (!opts.pierceArmor && this.armor) dmg = Math.max(amount * 0.25, amount - this.armor);
     if (this.def.shield) dmg *= (1 - this.def.shield);
     dmg = Math.max(1, dmg);
@@ -176,13 +190,18 @@
   /* =======================================================
      TURM
      ======================================================= */
-  function Tower(game, key, cx, cy) {
+  function Tower(game, role, cx, cy) {
     this.game = game;
-    this.key = key;
-    this.def = TD.TOWERS[key];
+    this.key = role;
+    this.role = role;
+    this.def = TD.towerDef(game.factionKey, role);
     this.cx = cx; this.cy = cy;
     this.x = (cx + 0.5) * CELL;
     this.y = (cy + 0.5) * CELL;
+
+    // Besonderes Feld unter dem Turm: Werte werden in stat() verrechnet
+    this.special = TD.maps.specialAt(game.map, cx, cy);
+    this.mods = this.special ? (this.special.mods[role] || this.special.mods.all) : null;
 
     this.level = 1;
     this.invested = this.def.cost;
@@ -195,15 +214,74 @@
     this.kills = 0;
     this.damageDealt = 0;
     this.chargeGlow = 0;
+
+    /* Held: Fähigkeit lädt sich auf und geht von allein los,
+       sobald sich der Einsatz lohnt. */
+    this.isHero = !!this.def.hero;
+    if (this.isHero) {
+      this.power = this.def.power;
+      /* Nach der Wende ihrer Geschichte kämpft die Hauptfigur
+         entschlossener: härtere Schläge, kürzere Verschnaufpausen. */
+      this.awakened = !!(game.campaign && game.campaign.heroAwakened);
+      this.powerTimer = this.power
+        ? this.power.cooldown * (this.awakened ? 0.4 : 0.55) : 0;
+      this.powerFlash = 0;
+      this.powerUses = 0;
+    }
   }
 
-  /** Aktueller Statuswert inkl. Upgrades. */
+  /** Aktueller Wert inkl. Ausbaustufe und Feldeffekt. */
   Tower.prototype.stat = function (name) {
     var d = this.def;
     var base = d[name];
     if (base == null) return null;
     var inc = (d.upg && d.upg[name]) || 0;
-    return base + inc * (this.level - 1);
+    var v = base + inc * (this.level - 1);
+
+    var m = this.mods;
+    if (m) {
+      if (name === 'chain') {
+        if (m.chain) v += m.chain;              // Kettenziele kommen hinzu
+      } else if (m[name] != null) {
+        v *= m[name];
+      } else if (m.status && TD.STATUS_STATS.indexOf(name) >= 0) {
+        v *= m.status;                          // Sammelbonus auf Statuseffekte
+      }
+    }
+
+    // Gewandelte Hauptfigur schlägt härter und schneller
+    if (this.isHero && this.awakened && (name === 'damage' || name === 'rate')) {
+      v *= (name === 'damage' ? 1.3 : 1.15);
+    }
+
+    // Steht ein Held in der Nähe, führt er die umliegenden Türme an
+    if (!this.isHero && (name === 'damage' || name === 'rate')) {
+      var aura = this.game.heroAura;
+      if (aura && aura[name]) {
+        var h = this.game.hero;
+        if (h && U.dist2(this.x, this.y, h.x, h.y) <= HERO_AURA_R * HERO_AURA_R) {
+          v *= aura[name];
+        }
+      }
+    }
+    return v;
+  };
+
+  /** Wirkungskreis der Heldenaura. */
+  var HERO_AURA_R = CELL * 3.2;
+  TD.HERO_AURA_R = HERO_AURA_R;
+
+  /** Wirkt das Feld auf diesen Turm – und wie? (für die Anzeige) */
+  Tower.prototype.fieldEffect = function () {
+    if (!this.special || !this.mods) return null;
+    var parts = [], m = this.mods;
+    var LABEL = { range: 'Reichweite', damage: 'Schaden', rate: 'Tempo', status: 'Wirkung' };
+    Object.keys(m).forEach(function (k) {
+      if (k === 'chain') { parts.push('+' + m.chain + ' Kettenziele'); return; }
+      var pct = Math.round((m[k] - 1) * 100);
+      if (pct !== 0) parts.push((pct > 0 ? '+' : '') + pct + ' % ' + (LABEL[k] || k));
+    });
+    return { tile: this.special, text: parts.join(' · '), good: parts.length > 0 };
   };
 
   Tower.prototype.rangePx = function () { return this.stat('range') * CELL; };
@@ -235,6 +313,14 @@
     if (this.buildAnim > 0) this.buildAnim = Math.max(0, this.buildAnim - dt * 2.5);
     if (this.recoil > 0) this.recoil = Math.max(0, this.recoil - dt * 6);
     if (this.chargeGlow > 0) this.chargeGlow = Math.max(0, this.chargeGlow - dt * 3);
+
+    if (this.isHero) {
+      if (this.powerFlash > 0) this.powerFlash = Math.max(0, this.powerFlash - dt * 2);
+      if (this.power) {
+        this.powerTimer -= dt;
+        if (this.powerTimer <= 0 && this.shouldUsePower()) this.usePower();
+      }
+    }
 
     this.cooldown -= dt;
 
@@ -339,6 +425,154 @@
         break;
     }
   };
+
+  /* =======================================================
+     Heldenfähigkeiten
+     ======================================================= */
+
+  /** Lohnt sich der Einsatz gerade? */
+  Tower.prototype.shouldUsePower = function () {
+    var p = this.power;
+    if (!p) return false;
+    var r = (p.radius ? p.radius * CELL : this.rangePx());
+    var list = this.game.enemies, n = 0;
+
+    /* Je länger die Fähigkeit schon bereitsteht, desto weniger Ziele
+       muss sie abwarten – sonst bliebe sie in dünnen Wellen ungenutzt. */
+    var need = p.minTargets || 3;
+    var overdue = -this.powerTimer;
+    if (overdue > 4) need = Math.max(2, need - 1);
+    if (overdue > 9) need = 1;
+
+    for (var i = 0; i < list.length; i++) {
+      var e = list[i];
+      if (!e.alive) continue;
+      if (U.dist2(this.x, this.y, e.x, e.y) <= r * r) n++;
+      if (n >= need) return true;
+    }
+    // Ein Endgegner allein rechtfertigt den Einsatz ebenfalls
+    for (var b = 0; b < list.length; b++) {
+      if (list[b].alive && list[b].def.boss &&
+          U.dist2(this.x, this.y, list[b].x, list[b].y) <= r * r) return true;
+    }
+    return false;
+  };
+
+  Tower.prototype.usePower = function () {
+    var p = this.power, g = this.game;
+    if (!p) return;
+
+    this.powerTimer = p.cooldown * (this.awakened ? 0.75 : 1);
+    this.powerFlash = 1;
+    this.powerUses++;
+    var dmg = this.stat('damage') * p.damage;
+
+    switch (p.key) {
+
+      /* Pfeilhagel: Bombardement dort, wo es am dichtesten steht */
+      case 'arrowStorm': {
+        var spot = this.densestSpot(p.radius * CELL);
+        if (!spot) return;
+        g.addArrowStorm(spot.x, spot.y, p.radius * CELL, p.color, dmg, this);
+        TD.audio.heroPower('arrowStorm');
+        break;
+      }
+
+      /* Kriegsruf: Druckwelle, die zurückwirft und lähmt */
+      case 'warCry': {
+        var rr = p.radius * CELL;
+        var hit = 0;
+        g.enemies.forEach(function (e) {
+          if (!e.alive) return;
+          var d = U.dist(this.x, this.y, e.x, e.y);
+          if (d > rr) return;
+          hit++;
+          var dealt = e.applyDamage(dmg, { pierceArmor: true, tower: this });
+          this.damageDealt += dealt;
+          e.applySlow(p.slow, p.slowDur);
+          // Zurückwerfen: ein Stück den Weg zurück
+          e.dist = Math.max(0, e.dist - p.knockback);
+        }, this);
+        g.addShockwave(this.x, this.y, rr, p.color);
+        if (hit) g.addFloatText(this.x, this.y - CELL * 0.7, p.name + '!', p.color, true);
+        TD.audio.heroPower('warCry');
+        break;
+      }
+
+      /* Salve: ein Bolzen auf jedes Ziel in Reichweite */
+      case 'volley': {
+        var rv = p.radius * CELL, shots = 0;
+        var self = this;
+        g.enemies.forEach(function (e) {
+          if (!e.alive || shots >= (p.maxTargets || 8)) return;
+          if (U.dist2(self.x, self.y, e.x, e.y) > rv * rv) return;
+          shots++;
+          var dealt = e.applyDamage(dmg, { pierceArmor: true, tower: self });
+          self.damageDealt += dealt;
+          g.addBeam(self.x, self.y, e.x, e.y, p.color, false);
+          g.addSparks(e.x, e.y, p.color, 5);
+        });
+        if (shots) g.addFloatText(this.x, this.y - CELL * 0.7, p.name + ' ×' + shots, p.color, true);
+        TD.audio.heroPower('volley');
+        break;
+      }
+
+      /* Sanren-giri: drei Rundumschläge, jede Wunde blutet nach */
+      case 'threeCuts': {
+        g.addSpinCuts(this.x, this.y, p.radius * CELL, p.color,
+                      dmg, this, p.cuts || 3, p.poison, p.poisonDur);
+        TD.audio.heroPower('threeCuts');
+        break;
+      }
+
+      /* Sonnenstrahl: trifft alles auf einer Linie */
+      case 'sunbeam': {
+        var len = this.rangePx() * 1.5;
+        var ex = this.x + Math.cos(this.angle) * len;
+        var ey = this.y + Math.sin(this.angle) * len;
+        var half = (p.width || 30) / 2, count = 0;
+
+        g.enemies.forEach(function (e) {
+          if (!e.alive) return;
+          if (pointToSegment(e.x, e.y, this.x, this.y, ex, ey) > half + e.r) return;
+          count++;
+          var dealt = e.applyDamage(dmg, { pierceArmor: true, tower: this });
+          this.damageDealt += dealt;
+          if (p.poison) e.applyPoison(p.poison, p.poisonDur);
+        }, this);
+
+        g.addSunbeam(this.x, this.y, ex, ey, p.width || 30, p.color);
+        if (count) g.addFloatText(this.x, this.y - CELL * 0.7, p.name + '!', p.color, true);
+        TD.audio.heroPower('sunbeam');
+        break;
+      }
+    }
+  };
+
+  /** Punkt mit den meisten Gegnern im Umkreis – Ziel für Flächenangriffe. */
+  Tower.prototype.densestSpot = function (radius) {
+    var list = this.game.enemies, reach = this.rangePx();
+    var best = null, bestN = 0;
+
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (!c.alive) continue;
+      if (U.dist2(this.x, this.y, c.x, c.y) > reach * reach) continue;
+      var n = 0;
+      for (var j = 0; j < list.length; j++) {
+        if (list[j].alive && U.dist2(c.x, c.y, list[j].x, list[j].y) <= radius * radius) n++;
+      }
+      if (n > bestN) { bestN = n; best = c; }
+    }
+    return best ? { x: best.x, y: best.y } : null;
+  };
+
+  function pointToSegment(px, py, ax, ay, bx, by) {
+    var dx = bx - ax, dy = by - ay;
+    var l2 = dx * dx + dy * dy;
+    var t = l2 ? U.clamp(((px - ax) * dx + (py - ay) * dy) / l2, 0, 1) : 0;
+    return U.dist(px, py, ax + dx * t, ay + dy * t);
+  }
 
   Tower.prototype.nextChainTarget = function (from, exclude, range) {
     var list = this.game.enemies, best = null, bestD = Infinity;
@@ -502,6 +736,36 @@
     this.x += this.vx * dt;
     this.vy *= Math.pow(0.94, dt * 60);
   };
+
+  /* =======================================================
+     LOOTBOX – taucht zufällig auf und stellt eine Wissensfrage
+     ======================================================= */
+  function Lootbox(game, cx, cy) {
+    this.game = game;
+    this.cx = cx; this.cy = cy;
+    this.x = (cx + 0.5) * CELL;
+    this.y = (cy + 0.5) * CELL;
+    this.life = TD.LOOT.lifetime;
+    this.maxLife = TD.LOOT.lifetime;
+    this.spawnAnim = 1;
+    this.bob = Math.random() * U.TAU;
+    this.opened = false;
+    this.dead = false;
+  }
+
+  Lootbox.prototype.update = function (dt) {
+    if (this.spawnAnim > 0) this.spawnAnim = Math.max(0, this.spawnAnim - dt * 2);
+    this.bob += dt * 2.4;
+    this.life -= dt;
+    if (this.life <= 0) this.dead = true;
+  };
+
+  /** Liegt der Punkt auf der Kiste? Großzügig für Fingertipper. */
+  Lootbox.prototype.hitTest = function (px, py) {
+    return U.dist(px, py, this.x, this.y) < CELL * 0.75;
+  };
+
+  TD.Lootbox = Lootbox;
 
   TD.Enemy = Enemy;
   TD.Tower = Tower;

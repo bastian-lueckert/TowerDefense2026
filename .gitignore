@@ -1,0 +1,10 @@
+# Lokale Werkzeug-Konfiguration
+.claude/
+
+# Testartefakte des Entwicklungsservers
+tools/snapshot.png
+
+# Betriebssystem
+Thumbs.db
+Desktop.ini
+.DS_Store

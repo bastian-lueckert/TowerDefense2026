@@ -11,7 +11,6 @@
   var master = null, sfxBus = null, musicBus = null;
   var enabled = U.store.get('sound', true);
   var started = false;
-  var musicTimer = null;
   var noiseBuffer = null;
 
   /** AudioContext erst nach erster Nutzergeste erzeugen (Autoplay-Policy). */
@@ -41,6 +40,9 @@
     noiseBuffer = ctx.createBuffer(1, len, ctx.sampleRate);
     var d = noiseBuffer.getChannelData(0);
     for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+
+    // Der Sequencer bekommt seinen eigenen Zweig
+    if (TD.music) TD.music.attach(ctx, musicBus, noiseBuffer);
 
     started = true;
     return true;
@@ -106,39 +108,6 @@
     src.stop(t0 + dur + 0.02);
   }
 
-  /* ---------------- Hintergrundmusik ----------------
-     Langsame Akkordfolge in a-Moll, dazu sparsame Arpeggios.
-     Rein prozedural, ca. 8 s pro Akkord.                */
-  var CHORDS = [
-    [220.00, 261.63, 329.63],  // Am
-    [174.61, 220.00, 261.63],  // F
-    [196.00, 246.94, 293.66],  // G
-    [164.81, 207.65, 246.94]   // Em
-  ];
-  var chordIndex = 0;
-
-  function musicStep() {
-    if (!enabled || !ctx) return;
-    var chord = CHORDS[chordIndex % CHORDS.length];
-    chordIndex++;
-
-    // Fläche
-    for (var i = 0; i < chord.length; i++) {
-      tone({
-        freq: chord[i] / 2, type: 'sine', dur: 4.4, vol: 0.16,
-        attack: 1.2, bus: musicBus, filter: 'lowpass', cutoff: 700
-      });
-    }
-    // Arpeggio
-    for (var s = 0; s < 4; s++) {
-      tone({
-        freq: chord[s % chord.length] * 2, type: 'triangle',
-        dur: 0.5, vol: 0.05, delay: 0.55 + s * 0.55,
-        bus: musicBus, filter: 'lowpass', cutoff: 2200
-      });
-    }
-  }
-
   var A = TD.audio = {
 
     /** Nach der ersten Nutzergeste aufrufen. */
@@ -167,29 +136,43 @@
       return enabled;
     },
 
-    startMusic: function () {
-      if (musicTimer) return;
-      ensure();
-      musicStep();
-      musicTimer = setInterval(musicStep, 8800);
+    /** @param {string} factionKey bestimmt, welches Stück läuft */
+    startMusic: function (factionKey) {
+      if (!enabled) return;
+      if (!ensure()) return;
+      if (TD.music) {
+        TD.music.setVolume(0.55, 0.1);
+        TD.music.play(factionKey || 'medieval');
+      }
     },
+
     stopMusic: function () {
-      if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+      if (TD.music) TD.music.stop();
+    },
+
+    /** Während der Pause leiser stellen, statt abzubrechen. */
+    duckMusic: function (down) {
+      if (TD.music) TD.music.setVolume(down ? 0.16 : 0.55, 0.4);
+    },
+
+    musicTitle: function (factionKey) {
+      return TD.music ? TD.music.titleFor(factionKey) : '';
     },
 
     /* ---------------- Effekte ---------------- */
 
+    /** @param {string} kind Turmrolle: rapid|slow|splash|chain|sniper|dot */
     shoot: function (kind) {
       switch (kind) {
-        case 'cannon':
+        case 'splash':
           noise({ dur: 0.3, cutoff: 900, cutoffTo: 90, vol: 0.34, rate: 0.7 });
           tone({ freq: 150, to: 46, type: 'square', dur: 0.24, vol: 0.3 });
           break;
-        case 'frost':
+        case 'slow':
           tone({ freq: 1250, to: 720, type: 'sine', dur: 0.16, vol: 0.16 });
           tone({ freq: 1900, to: 1150, type: 'sine', dur: 0.12, vol: 0.09, delay: 0.03 });
           break;
-        case 'tesla':
+        case 'chain':
           noise({ dur: 0.16, filter: 'bandpass', cutoff: 2600, q: 7, vol: 0.22, rate: 1.6 });
           tone({ freq: 900, to: 2400, type: 'sawtooth', dur: 0.1, vol: 0.1 });
           break;
@@ -197,10 +180,10 @@
           tone({ freq: 620, to: 120, type: 'sawtooth', dur: 0.2, vol: 0.26 });
           noise({ dur: 0.26, cutoff: 2400, cutoffTo: 300, vol: 0.2, rate: 1.2 });
           break;
-        case 'poison':
+        case 'dot':
           tone({ freq: 300, to: 170, type: 'triangle', dur: 0.16, vol: 0.16, filter: 'lowpass', cutoff: 800 });
           break;
-        default: // gun
+        default: // rapid
           tone({ freq: 720, to: 330, type: 'square', dur: 0.07, vol: 0.14 });
           break;
       }
@@ -237,6 +220,68 @@
     leak: function () {
       tone({ freq: 260, to: 90, type: 'sawtooth', dur: 0.42, vol: 0.3, filter: 'lowpass', cutoff: 900 });
       noise({ dur: 0.4, cutoff: 500, cutoffTo: 90, vol: 0.22 });
+    },
+
+    /* --- Held --- */
+    heroArrive: function () {
+      [392, 523, 659, 784].forEach(function (f, i) {
+        tone({ freq: f, type: 'triangle', dur: 0.5, vol: 0.2, delay: i * 0.1 });
+        tone({ freq: f / 2, type: 'sine', dur: 0.6, vol: 0.12, delay: i * 0.1 });
+      });
+      noise({ dur: 0.4, filter: 'bandpass', cutoff: 1600, q: 2, vol: 0.09, delay: 0.15 });
+    },
+
+    heroPower: function (kind) {
+      switch (kind) {
+        case 'warCry':                     // tiefer Ruf mit Druckwelle
+          tone({ freq: 220, to: 90, type: 'sawtooth', dur: 0.55, vol: 0.3, filter: 'lowpass', cutoff: 1100 });
+          noise({ dur: 0.5, cutoff: 1400, cutoffTo: 120, vol: 0.3, rate: 0.7 });
+          break;
+        case 'volley':                     // Salve aus vielen Bolzen
+          for (var i = 0; i < 5; i++) {
+            tone({ freq: 640 + i * 40, to: 300, type: 'square', dur: 0.1, vol: 0.13, delay: i * 0.045 });
+          }
+          noise({ dur: 0.3, filter: 'highpass', cutoff: 1800, vol: 0.14 });
+          break;
+        case 'sunbeam':                    // heller, anschwellender Strahl
+          tone({ freq: 440, to: 1320, type: 'sawtooth', dur: 0.6, vol: 0.22, filter: 'lowpass', cutoff: 3200 });
+          tone({ freq: 880, to: 2640, type: 'sine', dur: 0.5, vol: 0.12, delay: 0.06 });
+          noise({ dur: 0.55, filter: 'bandpass', cutoff: 2600, q: 1.6, vol: 0.14 });
+          break;
+        default:                           // Pfeilhagel
+          for (var k = 0; k < 7; k++) {
+            noise({ dur: 0.14, filter: 'highpass', cutoff: 2200, vol: 0.1, delay: k * 0.07, rate: 1.4 });
+          }
+          tone({ freq: 300, to: 160, type: 'triangle', dur: 0.4, vol: 0.16 });
+          break;
+      }
+    },
+
+    /* --- Lootbox --- */
+    lootAppear: function () {
+      [784, 1047, 1319].forEach(function (f, i) {
+        tone({ freq: f, type: 'sine', dur: 0.3, vol: 0.11, delay: i * 0.07 });
+      });
+    },
+    lootOpen: function () {
+      noise({ dur: 0.25, filter: 'bandpass', cutoff: 1800, q: 3, vol: 0.14, rate: 1.3 });
+      tone({ freq: 520, to: 1050, type: 'triangle', dur: 0.3, vol: 0.16 });
+    },
+    correct: function () {
+      [523, 659, 784, 1047].forEach(function (f, i) {
+        tone({ freq: f, type: 'triangle', dur: 0.28, vol: 0.2, delay: i * 0.085 });
+        tone({ freq: f * 2, type: 'sine', dur: 0.2, vol: 0.07, delay: i * 0.085 });
+      });
+    },
+    wrong: function () {
+      tone({ freq: 330, to: 160, type: 'sawtooth', dur: 0.34, vol: 0.2, filter: 'lowpass', cutoff: 900 });
+      tone({ freq: 220, to: 110, type: 'square', dur: 0.4, vol: 0.12, delay: 0.08 });
+    },
+    unlock: function () {
+      [392, 523, 659, 784, 1047, 1319].forEach(function (f, i) {
+        tone({ freq: f, type: 'triangle', dur: 0.4, vol: 0.18, delay: i * 0.075 });
+      });
+      noise({ dur: 0.5, filter: 'bandpass', cutoff: 2400, q: 2, vol: 0.1, delay: 0.1 });
     },
 
     waveStart: function () {

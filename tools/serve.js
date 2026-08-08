@@ -19,6 +19,21 @@ var TYPES = {
 
 http.createServer(function (req, res) {
   var url = decodeURIComponent(req.url.split('?')[0]);
+
+  // Entwicklungshilfe: Screenshot des Canvas entgegennehmen
+  if (req.method === 'POST' && url === '/snap') {
+    var body = '';
+    req.on('data', function (c) { body += c; });
+    req.on('end', function () {
+      var b64 = body.replace(/^data:image\/\w+;base64,/, '');
+      fs.writeFile(path.join(ROOT, 'tools', 'snapshot.png'), Buffer.from(b64, 'base64'), function (err) {
+        res.writeHead(err ? 500 : 200, { 'Content-Type': 'text/plain' });
+        res.end(err ? String(err) : 'ok');
+      });
+    });
+    return;
+  }
+
   if (url === '/') url = '/index.html';
 
   var file = path.join(ROOT, url);
