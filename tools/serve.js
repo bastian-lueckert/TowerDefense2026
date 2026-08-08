@@ -43,7 +43,10 @@ http.createServer(function (req, res) {
     if (err) { res.writeHead(404); return res.end('Not found: ' + url); }
     res.writeHead(200, {
       'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream',
-      'Cache-Control': 'no-cache'
+      /* no-store statt no-cache: beim Entwickeln soll der Browser die
+         Dateien wirklich jedes Mal neu holen, sonst testet man
+         versehentlich den vorherigen Stand. */
+      'Cache-Control': 'no-store, must-revalidate'
     });
     res.end(data);
   });

@@ -689,41 +689,84 @@ button.x{ background:transparent; border:0; color:var(--muted); font-size:14px; 
 /* =========================================================
    Querformat auf dem Handy: wenig Höhe, Leiste rechts
    ========================================================= */
-@media (max-height: 520px) and (min-aspect-ratio: 1/1){
-  :root{ --sidebar-w:min(38vw, 290px); }
-  #sidebar{ padding:6px; gap:6px; }
-  #hud{ grid-template-columns:repeat(4,1fr); gap:4px; }
-  .stat{ padding:5px 4px; font-size:12.5px; justify-content:center; gap:4px; }
-  .stat .ico{ font-size:12px; }
-  .tower-card{ grid-template-columns:30px 1fr auto; padding:7px 8px; gap:7px; }
-  .tower-card .tc-icon{ width:30px; height:30px; }
-  .tower-card .tc-name{ font-size:13px; }
-  .tower-card .tc-desc{ display:none; }
-  .tower-card .key{ display:none; }
-  .panel-head{ padding:5px 9px; }
+@media (max-height: 560px) and (min-aspect-ratio: 1/1){
+  /* Die Leiste schrumpft auf eine schmale Symbolspalte. Der dadurch
+     gewonnene Platz geht ans Spielfeld – das ist im Querformat die
+     einzige Richtung, in der überhaupt etwas zu holen ist. */
+  :root{ --sidebar-w:114px; }
+  #sidebar{ padding:5px; gap:5px; }
+  #stage{ padding:3px; }
+
+  #hud{ grid-template-columns:1fr 1fr; gap:4px; }
+  .stat{ padding:4px 2px; font-size:12px; justify-content:center; gap:3px; }
+  .stat .ico{ font-size:11px; }
+  .stat-score{ display:none; }              /* Punkte stehen am Levelende */
+
+  .panel-head{ padding:4px 7px; font-size:10px; letter-spacing:.04em; }
+  .panel-head .hint{ display:none; }
+
+  /* Turmladen: nur Bild und Preis, der Name passt hier nicht mehr */
+  .tower-card{
+    grid-template-columns:1fr; justify-items:center; gap:2px;
+    padding:6px 3px;
+  }
+  .tower-card .tc-icon{ width:38px; height:38px; }
+  .tower-card .tc-name,
+  .tower-card .tc-desc,
+  .tower-card .key,
+  .hero-tag{ display:none; }
+  .tower-card .tc-cost{ font-size:12.5px; }
+
+  #wave-preview{ padding:5px 6px; gap:4px; justify-content:center; }
   .wp-name{ display:none; }
-  .wp-item{ padding:2px 6px 2px 3px; gap:2px; }
+  .wp-item{ padding:2px 5px 2px 2px; gap:2px; font-size:10.5px; }
 
-  /* Der eigentliche Fehler im Querformat: Turmladen, Wellenvorschau
-     und Upgrade-Panel zusammen sind höher als der Bildschirm, das
-     Upgrade lag unterhalb des sichtbaren Bereichs. Sobald ein Turm
-     gewählt ist, zeigt die Leiste deshalb nur noch diesen. */
-  body.has-selection #shop,
-  body.has-selection #wavepanel{ display:none; }
-  #tp-body{ padding:8px 9px; gap:7px; }
-  .tp-stats{ font-size:11.5px; }
-
-  /* Die Steuerung bleibt beim Blättern stehen und sichtbar. */
   #controls{
     position:sticky; bottom:0;
     background:linear-gradient(180deg,rgba(8,13,26,.85),#080d1a 40%);
     padding:5px 0 0;
   }
-  .btn{ padding:8px 10px; }
-  .btn-icon{ padding:8px 0; font-size:15px; }
-  .overlay-card{ padding:16px; }
-  .overlay h1{ font-size:22px; }
-  .overlay h2{ font-size:18px; }
+  .btn-primary{ font-size:12px; padding:9px 4px; line-height:1.15; }
+  .btn-primary .bonus{ font-size:10px; }
+  .ctrl-row{ grid-template-columns:1fr 1fr; gap:5px; }
+
+  /* --- Der ausgewählte Turm als Balken über dem Spielfeld ---
+     Vorher stand er unten in der Leiste und war dort außerhalb des
+     sichtbaren Bereichs. Als eigener Balken kann er nicht mehr
+     übersehen werden, und der Turmladen bleibt nebenher stehen. */
+  #towerpanel{
+    position:fixed; z-index:20;
+    left:6px; right:calc(var(--sidebar-w) + 6px); bottom:6px;
+    border-radius:14px; border-color:#3a5a8c;
+    box-shadow:0 10px 30px rgba(0,0,0,.6);
+    background:rgba(19,28,51,.97);
+    backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+  }
+  /* Flach halten: der Balken liegt über dem Spielfeld, jede Zeile
+     mehr verdeckt Türme. Werte und Zielwahl links, die beiden
+     großen Schaltflächen rechts daneben. */
+  #towerpanel .panel-head{ padding:3px 9px; font-size:10px; }
+  #tp-body{
+    display:grid; grid-template-columns:1fr auto;
+    align-items:center; gap:4px 12px; padding:6px 9px;
+  }
+  .tp-stats{
+    grid-column:1; grid-row:1;
+    grid-template-columns:repeat(4,auto); justify-content:start;
+    gap:0 14px; font-size:11.5px;
+  }
+  .tp-special{ display:none; }
+  .tp-target{ grid-column:1; grid-row:2; }
+  #tp-token{ grid-column:1 / -1; padding:7px; font-size:12px; }
+  .tp-actions{
+    grid-column:2; grid-row:1 / span 2;
+    grid-template-columns:1fr 1fr; gap:6px; min-width:224px;
+  }
+  .tp-actions .btn{ padding:10px 8px; font-size:13.5px; }
+
+  .overlay-card{ padding:15px; }
+  .overlay h1{ font-size:21px; }
+  .overlay h2{ font-size:17px; }
   .level-grid{ grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); }
 }
 

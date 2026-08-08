@@ -2,7 +2,7 @@
    sw.js – Service Worker: legt alle Dateien lokal ab,
    damit das Spiel ohne Internetverbindung startet.
    ========================================================= */
-var CACHE = 'td2026-v12';
+var CACHE = 'td2026-v13';
 
 var ASSETS = [
   './',

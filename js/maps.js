@@ -12,6 +12,14 @@
   var TD = global.TD, U = TD.utils;
   var CELL = TD.GRID.CELL, COLS = TD.GRID.COLS, ROWS = TD.GRID.ROWS;
 
+  /* Die Wegmuster unten sind für 20 × 12 Felder entworfen. Auf dem
+     gröberen Handyraster werden die festen Spalten- und Zeilenwerte
+     im selben Verhältnis mitgezogen, damit dieselben Formen
+     entstehen. Bei 20 × 12 ergibt sich der Ausgangswert exakt
+     wieder – die gewohnten Karten bleiben also unverändert. */
+  function sx(v) { return U.clamp(Math.round(v * COLS / 20), 1, COLS - 2); }
+  function sy(v) { return U.clamp(Math.round(v * ROWS / 12), 1, ROWS - 2); }
+
   var PATH_W = Math.round(CELL * 0.86);
   TD.PATH_W = PATH_W;
 
@@ -66,6 +74,28 @@
       ]
     }
   ];
+
+  /* Die festen Karten oben sind von Hand für 20 × 12 gezeichnet. Auf
+     dem Handyraster werden ihre Stützpunkte verhältnisgleich
+     umgerechnet; Werte außerhalb des Feldes (-1 als Startportal,
+     20 bzw. 12 als Ziel am Rand) bleiben Randmarken. Fallen zwei
+     Punkte durch das Runden zusammen, entfällt der Knick – der Weg
+     bleibt zusammenhängend und rechtwinklig. */
+  if (TD.GRID.COMPACT) {
+    DEFS.forEach(function (def) {
+      def.routes = def.routes.map(function (route) {
+        var out = [];
+        route.forEach(function (p) {
+          var x = p[0] < 0 ? -1 : (p[0] >= 20 ? COLS : U.clamp(Math.round(p[0] * COLS / 20), 1, COLS - 1));
+          var y = p[1] < 0 ? -1 : (p[1] >= 12 ? ROWS : U.clamp(Math.round(p[1] * ROWS / 12), 1, ROWS - 1));
+          var last = out[out.length - 1];
+          if (last && last[0] === x && last[1] === y) return;   // Knick entfällt
+          out.push([x, y]);
+        });
+        return out;
+      });
+    });
+  }
 
   /* =======================================================
      Wegerzeugung für die Kampagne
@@ -128,35 +158,35 @@
     switch (pattern) {
 
       case 'twin':            // zwei getrennte Wege zum selben Ziel
-        routes.push(snake(rnd, [-1, U.randIntR(rnd, 1, 3)], target, U.randIntR(rnd, 2, 3), [1, 5]));
-        routes.push(snake(rnd, [-1, U.randIntR(rnd, ROWS - 4, ROWS - 2)], target, U.randIntR(rnd, 2, 3), [6, ROWS - 2]));
+        routes.push(snake(rnd, [-1, U.randIntR(rnd, 1, sy(3))], target, U.randIntR(rnd, 2, 3), [1, sy(5)]));
+        routes.push(snake(rnd, [-1, U.randIntR(rnd, ROWS - 4, ROWS - 2)], target, U.randIntR(rnd, 2, 3), [sy(6), ROWS - 2]));
         break;
 
       case 'fork': {          // zwei Starts, die sich vereinigen
-        var joinX = U.randIntR(rnd, 9, 13);
+        var joinX = U.randIntR(rnd, sx(9), sx(13));
         var joinY = baseY;
         var join = [joinX, joinY];
-        routes.push(snake(rnd, [-1, U.randIntR(rnd, 1, 3)], join, 2, [1, 5])
+        routes.push(snake(rnd, [-1, U.randIntR(rnd, 1, sy(3))], join, 2, [1, sy(5)])
                     .concat([[COLS, baseY]]));
-        routes.push(snake(rnd, [-1, U.randIntR(rnd, ROWS - 4, ROWS - 2)], join, 2, [6, ROWS - 2])
+        routes.push(snake(rnd, [-1, U.randIntR(rnd, ROWS - 4, ROWS - 2)], join, 2, [sy(6), ROWS - 2])
                     .concat([[COLS, baseY]]));
         break;
       }
 
       case 'triple': {        // drei Zuläufe, gemeinsames Endstück
-        var jx = U.randIntR(rnd, 11, 14);
+        var jx = U.randIntR(rnd, sx(11), sx(14));
         var j = [jx, baseY];
-        var topX = U.randIntR(rnd, 4, 7);       // einmal ziehen, mehrfach nutzen
-        routes.push(snake(rnd, [-1, U.randIntR(rnd, 1, 2)], j, 2, [1, 4]).concat([[COLS, baseY]]));
-        routes.push(snake(rnd, [-1, U.randIntR(rnd, ROWS - 3, ROWS - 2)], j, 2, [7, ROWS - 2]).concat([[COLS, baseY]]));
+        var topX = U.randIntR(rnd, sx(4), sx(7));   // einmal ziehen, mehrfach nutzen
+        routes.push(snake(rnd, [-1, U.randIntR(rnd, 1, sy(2))], j, 2, [1, sy(4)]).concat([[COLS, baseY]]));
+        routes.push(snake(rnd, [-1, U.randIntR(rnd, ROWS - 3, ROWS - 2)], j, 2, [sy(7), ROWS - 2]).concat([[COLS, baseY]]));
         routes.push([[topX, -1], [topX, baseY], j, [COLS, baseY]]);
         break;
       }
 
       case 'cross': {         // einer von links, einer von oben
-        var cx1 = U.randIntR(rnd, 5, 9);
-        var cy1 = U.randIntR(rnd, 5, 8);
-        var cx2 = U.randIntR(rnd, 14, 17);
+        var cx1 = U.randIntR(rnd, sx(5), sx(9));
+        var cy1 = U.randIntR(rnd, sy(5), sy(8));
+        var cx2 = U.randIntR(rnd, sx(14), sx(17));
         routes.push(snake(rnd, [-1, U.randIntR(rnd, 2, ROWS - 3)], target, U.randIntR(rnd, 2, 4)));
         routes.push([[cx1, -1], [cx1, cy1], [cx2, cy1], [cx2, baseY], [COLS, baseY]]);
         break;

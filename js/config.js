@@ -9,10 +9,47 @@
   'use strict';
   var TD = global.TD = global.TD || {};
 
-  /* Logische Spielfeldmaße. PAD_TOP schafft Platz für Türme, die aus
-     der obersten Zeile nach oben herausragen – sonst würden sie am
-     Bildrand abgeschnitten. Canvas ist damit 960 × 604. */
-  TD.GRID = { COLS: 20, ROWS: 12, CELL: 48, PAD_TOP: 28 };
+  /* ---------------------------------------------------------
+     Logische Spielfeldmaße
+
+     PAD_TOP schafft Platz für Türme, die aus der obersten Zeile
+     nach oben herausragen – sonst würden sie am Bildrand
+     abgeschnitten.
+
+     Auf dem Handy ist der Bildschirm zu klein für 20 × 12 Felder:
+     eine Kachel geriete schmaler als eine Fingerkuppe. Dort wird
+     deshalb ein gröberes Raster gespielt (16 × 10). Die Kacheln
+     werden dadurch rund 40 % größer und das ganze Schlachtfeld
+     bleibt ohne Schieben sichtbar.
+
+     Die Wahl fällt einmal beim Laden – alle übrigen Bausteine
+     lesen TD.GRID beim Start aus und richten sich danach.
+     Mit ?raster=gross bzw. ?raster=klein lässt sie sich erzwingen.
+     --------------------------------------------------------- */
+  function pickGrid() {
+    var forced = (global.location.search.match(/[?&]raster=(klein|gross)/) || [])[1];
+    if (!forced) {
+      try { forced = global.localStorage.getItem('td2026.raster') || ''; } catch (e) {}
+    }
+
+    var coarse = !!(global.matchMedia &&
+                    global.matchMedia('(pointer: coarse)').matches);
+    var kurzeSeite = Math.min(global.innerWidth || 0, global.innerHeight || 0);
+    var handy = (forced === 'klein') ||
+                (!forced && coarse && kurzeSeite > 0 && kurzeSeite <= 540);
+
+    return handy ? { COLS: 16, ROWS: 10, CELL: 48, PAD_TOP: 28 }
+                 : { COLS: 20, ROWS: 12, CELL: 48, PAD_TOP: 28 };
+  }
+
+  TD.GRID = pickGrid();
+
+  /* Ein kleineres Feld bedeutet kürzere Wege. Damit die Gegner
+     trotzdem gleich lange unterwegs sind – und die Türme somit
+     gleich oft zum Schuss kommen – wird ihr Tempo mitskaliert.
+     Bei 20 Spalten ist der Faktor 1, die Balance bleibt dort exakt. */
+  TD.GRID.SPEED_SCALE = TD.GRID.COLS / 20;
+  TD.GRID.COMPACT = TD.GRID.COLS < 20;
 
   /* ---------------------------------------------------------
      GRUNDWERTE DER SECHS ROLLEN

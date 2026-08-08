@@ -5,6 +5,7 @@
   'use strict';
   var TD = global.TD, U = TD.utils;
   var CELL = TD.GRID.CELL;
+  var SPEED_SCALE = TD.GRID.SPEED_SCALE || 1;
 
   /* =======================================================
      GEGNER
@@ -26,7 +27,9 @@
     this.gold = st.gold;
     this.score = st.score;
     this.armor = def.boss || def.armor > 0 ? st.armor : 0;
-    this.baseSpeed = def.speed * CELL;   // Pixel/s
+    // Pixel/s – auf kleinerem Raster entsprechend langsamer, damit die
+    // Laufzeit über den kürzeren Weg dieselbe bleibt (siehe config.js).
+    this.baseSpeed = def.speed * CELL * SPEED_SCALE;
     this.r = def.r;
     this.flying = !!def.flying;
 
