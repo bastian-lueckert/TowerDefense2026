@@ -114,8 +114,21 @@ html,body{
 .panel-head .hint{ font-weight:600; text-transform:none; letter-spacing:0; font-size:11px; opacity:.8; }
 .hidden{ display:none !important; }
 
-/* ---------- Turmshop ---------- */
-#shop-list{ display:flex; flex-direction:column; gap:0; }
+/* ---------- Turmshop ----------
+   Wichtig: Die Panels dürfen nicht gestaucht werden. Sonst schneidet
+   ihr overflow:hidden Inhalte ab, ohne dass etwas darauf hinweist –
+   genau so verschwanden bei knapper Höhe die hinteren Türme. Alle
+   Panels behalten deshalb ihre Höhe; allein der Turmladen gibt nach
+   und blättert dafür in sich selbst. */
+#sidebar > *{ flex:0 0 auto; }
+#shop{ display:flex; flex-direction:column; flex:0 1 auto; min-height:104px; }
+#shop-list{
+  display:flex; flex-direction:column; gap:0;
+  overflow-y:auto; min-height:0;
+  scrollbar-width:thin; scrollbar-color:var(--line) transparent;
+}
+#shop-list::-webkit-scrollbar{ width:6px; }
+#shop-list::-webkit-scrollbar-thumb{ background:var(--line); border-radius:6px; }
 
 .tower-card{
   display:grid; grid-template-columns:38px 1fr auto; align-items:center; gap:9px;
@@ -661,10 +674,33 @@ button.x{ background:transparent; border:0; color:var(--muted); font-size:14px; 
   }
   #hud{ grid-template-columns:repeat(4,1fr); }
   .stat{ padding:6px; font-size:13.5px; justify-content:center; gap:5px; }
-  .tower-card{ grid-template-columns:34px 1fr auto; padding:9px; gap:8px; }
-  .tower-card .tc-icon{ width:34px; height:34px; }
+
+  /* Der Turmladen liegt quer statt untereinander. Untereinander
+     passten nur zwei Türme in die Leiste, der Rest wurde vom
+     Panelrand abgeschnitten – man konnte sie schlicht nicht sehen. */
+  #shop{ flex:none; }
+  #shop-list{
+    flex-direction:row; flex-wrap:wrap; gap:0;
+  }
+  /* Vier je Reihe – so sind alle sieben Türme auf einen Blick da,
+     ohne blättern zu müssen. */
+  .tower-card{
+    flex:1 1 84px; max-width:50%;
+    grid-template-columns:1fr; justify-items:center; align-content:center;
+    gap:1px; padding:7px 4px;
+    border-bottom:1px solid rgba(255,255,255,.06);
+    border-right:1px solid rgba(255,255,255,.06);
+  }
+  .tower-card .tc-icon{ width:36px; height:36px; }
+  .tower-card .tc-name{
+    font-size:9.5px; line-height:1.2; max-width:78px; text-align:center;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .tower-card .tc-cost{ font-size:12.5px; }
   .tower-card .tc-desc{ display:none; }
   .tower-card .key{ display:none; }
+  .hero-tag{ display:none; }
+  .tower-card.selected{ box-shadow:inset 0 3px 0 var(--accent); }
   /* Die Steuerung muss immer erreichbar bleiben, auch beim Blättern. */
   #controls{
     margin-top:4px; position:sticky; bottom:0;
@@ -705,17 +741,40 @@ button.x{ background:transparent; border:0; color:var(--muted); font-size:14px; 
   .panel-head{ padding:4px 7px; font-size:10px; letter-spacing:.04em; }
   .panel-head .hint{ display:none; }
 
-  /* Turmladen: nur Bild und Preis, der Name passt hier nicht mehr */
-  .tower-card{
-    grid-template-columns:1fr; justify-items:center; gap:2px;
-    padding:6px 3px;
+  /* Der Turmladen passt nicht in die schmale Spalte – untereinander
+     wären dort nur zwei von sieben Türmen zu sehen gewesen. Er wird
+     deshalb zur waagerechten Leiste am unteren Feldrand, wo alle
+     nebeneinander Platz finden. */
+  #shop{
+    position:fixed; z-index:18;
+    left:6px; right:calc(var(--sidebar-w) + 6px); bottom:6px;
+    border-radius:14px; border-color:#3a5a8c;
+    background:rgba(19,28,51,.97);
+    box-shadow:0 8px 26px rgba(0,0,0,.55);
+    backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
   }
-  .tower-card .tc-icon{ width:38px; height:38px; }
-  .tower-card .tc-name,
+  #shop .panel-head{ display:none; }
+  #shop-list{ flex-direction:row; overflow-x:auto; overflow-y:hidden; }
+  .tower-card{
+    flex:0 0 84px;
+    grid-template-columns:1fr; justify-items:center; gap:1px;
+    padding:6px 3px;
+    border-bottom:0; border-right:1px solid rgba(255,255,255,.06);
+  }
+  .tower-card .tc-icon{ width:34px; height:34px; }
+  .tower-card .tc-name{
+    font-size:9.5px; line-height:1.2; max-width:76px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
   .tower-card .tc-desc,
   .tower-card .key,
   .hero-tag{ display:none; }
   .tower-card .tc-cost{ font-size:12.5px; }
+  .tower-card.selected{ box-shadow:inset 0 3px 0 var(--accent); }
+
+  /* Turmleiste und Ausbaubalken teilen sich denselben Platz: ist ein
+     Turm gewählt, tritt der Laden zurück. */
+  body.has-selection #shop{ display:none; }
 
   #wave-preview{ padding:5px 6px; gap:4px; justify-content:center; }
   .wp-name{ display:none; }

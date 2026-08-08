@@ -88,9 +88,12 @@
       var h0 = canvas.offsetHeight;
       if (!h0 || !r.height) return;
 
-      /* So weit vergrößern, dass ein Feld gut 34 Punkte misst –
-         aber höchstens so weit, wie die Höhe hergibt. */
-      var wanted = 34 / (canvas.offsetWidth / 20);
+      /* So weit vergrößern, dass eine Kachel rund 42 Punkte misst –
+         bequem zu treffen –, aber höchstens so weit, wie die Höhe
+         hergibt. Passt das Feld ohnehin schon (Querformat), bleibt
+         es bei 1 und es muss nichts geschoben werden. */
+      var kachel = canvas.offsetWidth / (TD.GRID ? TD.GRID.COLS : 20);
+      var wanted = 42 / kachel;
       var byHeight = r.height / h0;
       scale = clamp(Math.min(wanted, byHeight), MIN, 2.8);
       tx = ty = 0;
